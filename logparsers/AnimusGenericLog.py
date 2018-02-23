@@ -18,9 +18,9 @@ class AnimusGenericLog:
     #   baseUri - The base URI of the animus API, as stored in the ~/.animus.cfg file
     ################################
 
-    def __init__(self, logfile, ports, apiKey, baseUri):
+    def __init__(self, logfile, ports, apiKey, baseUri="https://api.threshingfloor.io"):
         self.BASE_URI = baseUri
-        self.API_ENDPOINT = '/va/generic'
+        self.API_ENDPOINT = '/reducer/seen'
         self.apiKey = apiKey
         self.unhandledLogs = []
         self.features = {}
@@ -171,7 +171,7 @@ class AnimusGenericLog:
     def _sendAuthFeatureQuery(self, features):
 
         try:
-            r = requests.post(self.BASE_URI + self.API_ENDPOINT, data = json.dumps(features), headers={'api_key': self.apiKey})
+            r = requests.post(self.BASE_URI + self.API_ENDPOINT, data = json.dumps(features), headers={'XAPIKEY_HEADER': self.apiKey})
         except requests.exceptions.ConnectionError as e:
             raise AnimusAPIUnavailable("The Animus API appears to be unavailable.")
 
