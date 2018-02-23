@@ -2,6 +2,8 @@ import re
 import time
 import requests
 import json
+from dateutil.relativedelta import relativedelta
+import datetime
 from AnimusExceptions import *
 
 
@@ -19,15 +21,16 @@ class AnimusAuthLog:
     #   year - The year we should assume the log file is from
     ################################
 
-    def __init__(self, logfile, apiKey, baseUri, year=2017):
+    def __init__(self, logfile, apiKey, baseUri="https://api.threshingfloor.io", year=2018):
         self.BASE_URI = baseUri
-        self.API_ENDPOINT = '/va/auth'
+        self.API_ENDPOINT = '/reducer/seen'
         self.apiKey = apiKey
         self.year = year
         self.unhandledLogs = []
-        self.features = []
+        self.features = {}
         self.parsedLog = []
-        self.filter = []
+        self.filter = {'ips': [], 'ports': []}
+        self.ipAndPid = {}
 
         # quietLogs are logs that have had noise removed
         self.quietLogs = []
@@ -40,24 +43,33 @@ class AnimusAuthLog:
         # are known to be brute forcing ssh servers, they may have successfully broken in
         self.alertLogs = []
 
+        # Set the regex for syslog
+        regex_string = (r"^((?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?"
+                        r"|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b\s+(?:(?:0[1-9])|(?:[12][0-9])|(?:3[01])|[1-9])\s+"
+                        r"(?:(?:2[0123]|[01]?[0-9]):(?:[0-5][0-9]):(?:(?:[0-5]?[0-9]|60)(?:[:\.,][0-9]+)?)))) (?:<(?:[0-9]+).(?:[0-9]+)> )"
+                        r"?((?:[a-zA-Z0-9._-]+)) ([\w\._/%-]+)(?:\[((?:[1-9][0-9]*))\])?: (.*)")
+        self.SYSLOG_REGEX = re.compile(regex_string)
+
+        self.parsedLog = self._jsonifySyslog(logfile)
 
         # Get the features from the file
-        self._getFeatures(logfile)
+        (self.features['ips'], self.ipAndPid) = self._getFeatures(self.parsedLog)
+
+        # Set the appropriate ports
+        self.features['ports'] = [{'port': 22, 'protocol': 'tcp'}]
 
         # These variables are now set:
         # self.unhandledLogs
         # self.features
         # self.parsedLog
 
-
         #Set the filter for the file
-        self._getFilter()
+        self._getFilter(self.features)
 
         # self.filter is now set
 
-
         # Perform the analysis operation
-        self._analyze(self.parsedLog)
+        self._analyze(self.parsedLog, self.ipAndPid)
 
         # self.noisyLogs and self.quietLogs is now set
 
@@ -87,164 +99,155 @@ class AnimusAuthLog:
     #
     ################################
 
-    def _analyze(self, parsedLog):
+    def _analyze(self, parsedLog, ipAndPid):
 
-        # Go through every parsed log line
-        i = 0
+        # A list of pids to reduce 
+        pids = []
 
-        oldParsedLog = list(parsedLog)
+        # Loop through the filter
+        for ip in self.filter['ips']:
 
-        while i < len(parsedLog):
+            # If we see the ip in our ip/pid dict
+            if ip in ipAndPid:
 
-            # This line is going to have some features we need to extract
-            lineFeatures = {}
-
-            # If we are an auth log, we can do something
-            if parsedLog[i]['service'] == 'sshd':
-
-                # Get ip's and usernames
-                lineFeatures = self._parseAuthMessage(parsedLog[i])
-
-                # Compare the IP address in the log to see if it's in the filter
-                if 'ip' in lineFeatures:
-                    for filterItem in self.filter:
+                # Pull each pid and make sure we filter it later
+                for pid in ipAndPid[ip]:
+                    pids.append(pid)
 
 
+        for line in parsedLog:
 
-                        # TODO: Right now we are just checking the ip address and timestamp
-                        # TODO: We should check and see if there is a match on a successful login so we can make it important. Need to change parse function for this
-                        if lineFeatures['ip'] == filterItem['ip'] and parsedLog[i]['datetime'] <= filterItem['endtime'] and parsedLog[i]['datetime'] >= filterItem['starttime']:
-                            # We are at a log line that matches our filter
-                            
-                            # Lets save the pid and remove all entries with this pid
-                            delPid = parsedLog[i]['pid']
-
-                            # Search for the same pid within 20 lines and eliminate
-                            for x in range(-10, 10):
-                                # Current position plus offset, x + i
-                                # If we have a log with the pid we want to delete
-
-                                # Check to make sure it's in bounds
-                                if i+x < 0 or i+x > len(parsedLog):
-                                    continue
-
-                                if parsedLog[x+i]['pid'] == delPid:
-                                    # Pop the log from the list and add it to the list of noisy logs
-                                    self.noisyLogs.append((parsedLog.pop(x+i)))
-
-                                    # Backup the current index to account for the missing item
-                                    i -= 10
-            i += 1
-
-        # The quiet logs are everything that's left
-        self.quietLogs = parsedLog
-
-        self.parsedLog = oldParsedLog
-
-    ################################
-    # Description:
-    #   Gets the filter for the features in the object
-    ################################
-
-    def _getFilter(self, ):
-
-        # This chops the features up into smaller lists so the api can handle them
-        size = 10000
-        for featureChunk in (self.features[pos:pos + size] for pos in xrange(0, len(self.features), size)):
-            # Query for each chunk and add it to the filter list
-            self.filter += self._sendAuthFeatureQuery(featureChunk)
+            # If we have a pid hit, filter it
+            if line['processid'] in pids:
+                self.noisyLogs.append(line)
+            else:
+                self.quietLogs.append(line)
 
     ################################
     # Description:
     #   Get the feature data from the log file necessary for a reduction
     # 
     # Params:
+    #   parsedLog - The parsed syslog file
+    #
+    # Returns:
+    #   A list of ip's from the log file
+    ################################
+
+    def _getFeatures(self, parsedLog):
+
+        # The dict that holds the features of the log file
+        ips = []
+
+        ipAndPid = {}
+
+        # Go through each line in the log
+        for line in parsedLog:
+
+            # If it's ssh, we can handle it
+            if line['program'] == 'sshd':
+                result = self._parseAuthMessage(line['message'])
+
+                # Add the ip if we have it
+                if 'ip' in result:
+                    ips.append(result['ip'])
+
+                    # Make a ip pid dict that has a list of pids associated with an ip
+
+                    # If we havent seen the ip, add it
+                    if result['ip'] not in ipAndPid:
+
+                        # Make the value a list of pids
+                        ipAndPid[result['ip']] = [line['processid']]
+                    else:
+
+                        # If we have seen the ip before, add the pid if it's a new one
+                        if line['processid'] not in ipAndPid[result['ip']]:
+                            ipAndPid[result['ip']].append(line['processid'])
+
+            # TODO: We should handle other programs like telnet
+
+        return (ips, ipAndPid)
+
+    ################################
+    # Description:
+    #   Parse a valid syslog file and convert it to json.
+    #
+    # Params:
     #   logfile - The file to extract features from
     #
     # Returns:
-    #   Nothing. Sets self.parsedLog, self.features, and self.unhandledLogs
+    #   parsedLog - A dict object that contains all syslog metadata
     ################################
 
-    def _getFeatures(self, logfile):
-
-        # The dict that holds the features of the log file
-        features = {}
+    def _jsonifySyslog(self, logfile):
+        parsedSyslog = []
 
         for line in logfile:
+            m = self.SYSLOG_REGEX.match(line)
+            if m:
+                data = {
+                    'timestamp': self.toEpoch(m.group(1)),
+                    'hostname': m.group(2),
+                    'program': m.group(3),
+                    'processid': m.group(4),
+                    'message': m.group(5),
+                    'raw': line
+                }
 
-            # Clear previous results
-            result = {}
-
-            # Parse the line to extract metadata
-            # Save it to a parsed log object
-            parsedLine = self._parseLine(line)
-            self.parsedLog.append(parsedLine)
-
-            if 'service' in parsedLine and 'datetime' in parsedLine:
-
-                # If we are an auth log, we need to extract more metadata
-                if parsedLine['service'] == 'sshd':
-
-                    result = self._parseAuthMessage(parsedLine)
-
-                    # Save to our global list of features
-
-                    if 'ip' in result and 'datetime' in parsedLine:
-
-                        # If our IP doesn't have an entry, make one
-                        if result['ip'] not in features:
-                            features[result['ip']] = {}
-                            features[result['ip']]['ip'] = result['ip']
-                            features[result['ip']]['starttime'] = parsedLine['datetime']
-                            features[result['ip']]['endtime'] = parsedLine['datetime']
-                            features[result['ip']]['usernames'] = []
-
-                        # See if we have a username in this log line
-                        if 'username' in result:
-                            
-                            # Add our username to the list if it isnt there already
-                            if result['username'] not in features[result['ip']]['usernames']:
-                                features[result['ip']]['usernames'].append(result['username'])
-
-                        # See if this log is earlier than the previous earliest log. If so, set it
-                        if features[result['ip']]['starttime'] > parsedLine['datetime']:
-                            features[result['ip']]['starttime'] = parsedLine['datetime']
-
-                        # See if this log is later than the previous latest log. If so, set it
-                        if features[result['ip']]['endtime'] < parsedLine['datetime']:
-                            features[result['ip']]['endtime'] = parsedLine['datetime']
-
-                # If we are not an auth log, we are not handling it right now
-                else:
-                    pass
+                parsedSyslog.append(data)
 
             else:
-                # If we can't parse this, toss an exception. We will probably try as something else.
+                # TODO: Error check better
+                pass
                 raise AnimusLogParsingException('auth')
 
-        #returnedFeatures = []
-        #
-        #for ip in features:
-        #    returnedFeatures.append(features[ip])
-        #
-        #return returnedFeatures
+        return parsedSyslog
 
-        for ip in features:
-            self.features.append(features[ip])
+    ################################
+    # Description:
+    #   Add the most recent year's timestamp to the syslog timestamp because syslog doesn't use years
+    #
+    # Params:
+    #   ts - The timestamp to add a year to
+    #
+    # Returns:
+    #   response - A dict object that contains metadata for the auth message
+    ################################
 
+    def toEpoch(self, ts):
+
+        # Add the current year
+        theYear = datetime.datetime.now().year
+        tmpts = "%s %s" % (ts, str(theYear))
+
+        # Build the new time
+        newTime = int(time.mktime(time.strptime(tmpts, "%b %d %H:%M:%S %Y")))
+
+        # If adding the current year puts it in the future, this log must be from last year
+        if newTime > int(time.time()):
+            theYear -= 1
+
+            # Build the new time
+            tmpts = "%s %s" % (ts, str(theYear))
+            newTime = int(time.mktime(time.strptime(tmpts, "%b %d %H:%M:%S %Y")))
+
+
+        # Parse and return as integer
+        return newTime
 
     ################################
     # Description:
     #   Parse an auth message to see if we have ip addresses or users that we care about
     #
     # Params:
-    #   parsedLine - The auth message we are trying to parse
+    #   authMessage - The auth message we are trying to parse
     #
     # Returns:
     #   response - A dict object that contains metadata for the auth message
     ################################
 
-    def _parseAuthMessage(self, parsedLine):
+    def _parseAuthMessage(self, authMessage):
 
         # TODO: We should save if it was a success or failure so we can make a bad ip with a successful login highly important
 
@@ -288,8 +291,6 @@ class AnimusAuthLog:
 
         result = {}
 
-        authMessage = parsedLine['message']
-
         hasMatched = False
 
         for REGEX in REGEXES_INVALID_USER:
@@ -325,72 +326,42 @@ class AnimusAuthLog:
 
         # If it's an ssh log and we don't know what it is, handle that
         if not hasMatched:
-            self._unhandledAuthLog(parsedLine)
+            self._unhandledAuthLog(authMessage)
 
         return result
 
 
     ################################
     # Description:
-    #   Parse the individual log line and return structured metadata we care about
-    #
-    # Params:
-    #   logLine - The individual line we are trying to parse
-    #
-    # Returns:
-    #   response - A dict object that contains metadata for the log line. Returns the PID, service name, and timestamp
-    ################################
-
-    def _parseLine(self, logLine):
-        response = {}
-
-        try:
-            # Split on spaces
-            # TODO: Not sure if this is a good idea in the general case for log files
-            splitLine = logLine.split()
-            
-            # Get the timestamp, assuming the year that was passed to us
-            response['datetime'] = int(time.mktime(time.strptime(" ".join(splitLine[0:3]) + " " + str(self.year), "%b %d %H:%M:%S %Y")))
-
-            # We have to make sure it isn't in the future though. If it is, subtract a year.
-            # TODO: There's a better way to do this
-            if response['datetime'] > int(time.time()):
-                response['datetime'] = response['datetime'] - 31536000 
-
-            # Get the service name
-            process = splitLine[4]
-
-            splitProc = re.split('\W+', process)
-            response['service'] = splitProc[0]
-
-            # Get the PID
-            response['pid'] = splitProc[1]
-
-            # Get the log message
-            response['message'] = " ".join(splitLine[5:])
-
-            # Save the raw message
-            response['raw'] = logLine   
-
-        except Exception as e:
-            # TODO: Handle the error better
-            #print(e)
-            pass
-
-        return response
-
-    ################################
-    # Description:
     #   If we have an auth log that we don't have a regex for, we need to add it to a list of unhandled log lines
     #
     # Params:
-    #   parsedLine - The parsed auth log line that we don't know how to handle 
+    #   authMessage - The parsed auth log line that we don't know how to handle 
     #
     ################################
 
-    def _unhandledAuthLog(self, parsedLine):
-        self.unhandledLogs.append(parsedLine['message'])
+    def _unhandledAuthLog(self, authMessage):
+        self.unhandledLogs.append(authMessage)
 
+    ################################
+    # Description:
+    #   Gets the filter for the features in the object
+    #
+    # Params:
+    #   features - The features of the syslog file
+    #
+    # Returns:
+    #   Nothing
+    ################################
+
+    def _getFilter(self, features):
+
+        # This chops the features up into smaller lists so the api can handle them
+        size = 10000
+        for featureChunk in (features['ips'][pos:pos + size] for pos in xrange(0, len(features['ips']), size)):
+            # Query for each chunk and add it to the filter list
+            query = {'ips': featureChunk, 'ports': features['ports']}
+            self.filter['ips'] += self._sendAuthFeatureQuery(query)['ips']
 
     ################################
     # Description:
@@ -407,12 +378,13 @@ class AnimusAuthLog:
         
         # Hit the auth endpoint with a list of features
         try:
-            r = requests.post(self.BASE_URI + self.API_ENDPOINT, data = json.dumps(features), headers={'api_key': self.apiKey})
+            r = requests.post(self.BASE_URI + self.API_ENDPOINT, data = json.dumps(features), headers={'XAPIKEY_HEADER': self.apiKey})
         except requests.exceptions.ConnectionError as e:
             raise AnimusAPIUnavailable("The Animus API appears to be unavailable.")
 
         # If we error, try and die gracefully
         if r.status_code != 200:
+            print(r.text)
             raise AnimusAPIUnavailable("Request failed and returned a status of: {STATUS_CODE}".format(STATUS_CODE=r.status_code))
 
         return json.loads(r.text)
