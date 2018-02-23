@@ -99,7 +99,10 @@ ENV/
 
 # mypy
 .mypy_cache/
+<<<<<<< HEAD
 
 # Mac Finder
 *.DS_Store
 
+=======
+>>>>>>> 1070235452d73f8105ec25cd96091630ffddf2ab

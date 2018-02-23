@@ -1,2 +1,2 @@
-# libanimus
-Libraries that power the Animus integrations.
+# libtf
+Python library for ThreshingFloor API and reducer.
