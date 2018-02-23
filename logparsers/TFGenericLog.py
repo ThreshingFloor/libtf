@@ -1,21 +1,21 @@
 import re
 import requests
 import json
-from AnimusExceptions import *
+from TFExceptions import *
 
 
-class AnimusGenericLog:
+class TFGenericLog:
 
     ################################
     # Description:
-    #   Initializer for the AnimusGenericLog object. Pass it a fileName and it will handle
+    #   Initializer for the TFGenericLog object. Pass it a fileName and it will handle
     #   reduction for generic logs.
     #
     # Params:
     #   logfile - The array of lines in the logfile we are analyzing
     #   port - The port and protocol list to obtain a filter for
-    #   apiKey - The api key pulled from the ~/.animus.cfg file
-    #   baseUri - The base URI of the animus API, as stored in the ~/.animus.cfg file
+    #   apiKey - The api key pulled from the ~/.tf.cfg file
+    #   baseUri - The base URI of the tf API, as stored in the ~/.tf.cfg file
     ################################
 
     def __init__(self, logfile, ports, apiKey, baseUri="https://api.threshingfloor.io"):
@@ -173,11 +173,11 @@ class AnimusGenericLog:
         try:
             r = requests.post(self.BASE_URI + self.API_ENDPOINT, data = json.dumps(features), headers={'XAPIKEY_HEADER': self.apiKey})
         except requests.exceptions.ConnectionError as e:
-            raise AnimusAPIUnavailable("The Animus API appears to be unavailable.")
+            raise TFAPIUnavailable("The ThreshingFloor API appears to be unavailable.")
 
 
         if r.status_code != 200:
-            raise AnimusAPIUnavailable("Request failed and returned a status of: " + str(r.status_code))
+            raise TFAPIUnavailable("Request failed and returned a status of: " + str(r.status_code))
 
         return json.loads(r.text)
 

@@ -4,20 +4,20 @@ import requests
 import json
 from dateutil.relativedelta import relativedelta
 import datetime
-from AnimusExceptions import *
+from TFExceptions import *
 
 
-class AnimusAuthLog:
+class TFAuthLog:
 
     ################################
     # Description:
-    #   Constructor for the AnimusAuthLog object. Pass it a fileName and it will handle
+    #   Constructor for the TFAuthLog object. Pass it a fileName and it will handle
     #   reduction for Auth events.
     #
     # Params:
     #   logfile - The array of log lines to be reduced
-    #   apiKey - The api key pulled from the ~/.animus.cfg file
-    #   baseUri - The base URI of the animus API, as stored in the ~/.animus.cfg file
+    #   apiKey - The api key pulled from the ~/.tf.cfg file
+    #   baseUri - The base URI of the ThreshingFloor API, as stored in the ~/.tf.cfg file
     #   year - The year we should assume the log file is from
     ################################
 
@@ -200,7 +200,7 @@ class AnimusAuthLog:
             else:
                 # TODO: Error check better
                 pass
-                raise AnimusLogParsingException('auth')
+                raise TFLogParsingException('auth')
 
         return parsedSyslog
 
@@ -380,12 +380,12 @@ class AnimusAuthLog:
         try:
             r = requests.post(self.BASE_URI + self.API_ENDPOINT, data = json.dumps(features), headers={'XAPIKEY_HEADER': self.apiKey})
         except requests.exceptions.ConnectionError as e:
-            raise AnimusAPIUnavailable("The Animus API appears to be unavailable.")
+            raise TFAPIUnavailable("The ThreshingFloor API appears to be unavailable.")
 
         # If we error, try and die gracefully
         if r.status_code != 200:
             print(r.text)
-            raise AnimusAPIUnavailable("Request failed and returned a status of: {STATUS_CODE}".format(STATUS_CODE=r.status_code))
+            raise TFAPIUnavailable("Request failed and returned a status of: {STATUS_CODE}".format(STATUS_CODE=r.status_code))
 
         return json.loads(r.text)
 

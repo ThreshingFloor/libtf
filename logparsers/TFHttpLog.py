@@ -3,25 +3,25 @@ import time, datetime, pytz
 import requests
 import json
 import sys
-from AnimusExceptions import *
-from AnimusGenericLog import AnimusGenericLog
+from TFExceptions import *
+from TFGenericLog import TFGenericLog
 
-class AnimusHttpLog:
+class TFHttpLog:
 
     ################################
     # Description:
-    #   Initializer for the AnimusHttpLog object. Pass it a fileName and it will handle
+    #   Initializer for the TFHttpLog object. Pass it a fileName and it will handle
     #   reduction for http access logs.
     #
     # Params:
     #   logfile - The array of lines in the logfile we are analyzing
-    #   apiKey - The api key pulled from the ~/.animus.cfg file
-    #   baseUri - The base URI of the animus API, as stored in the ~/.animus.cfg file
+    #   apiKey - The api key pulled from the ~/.tf.cfg file
+    #   baseUri - The base URI of the ThreshingFloor API, as stored in the ~/.tf.cfg file
     ################################
 
     def __init__(self, logfile, apiKey, baseUri="https://api.threshingfloor.io"):
 
-        self.reducer = AnimusGenericLog(logfile, ["80:tcp", "8080:tcp"], apiKey)
+        self.reducer = TFGenericLog(logfile, ["80:tcp", "8080:tcp"], apiKey)
 
     ################################
     # Description:

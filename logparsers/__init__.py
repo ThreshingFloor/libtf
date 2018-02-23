@@ -1,5 +1,5 @@
-from AnimusLog import AnimusLog
-from AnimusAuthLog import AnimusAuthLog
-from AnimusHttpLog import AnimusHttpLog
-from AnimusGenericLog import AnimusGenericLog
-from AnimusExceptions import AnimusException, AnimusAPIUnavailable, AnimusLogParsingException
+from TFLog import TFLog
+from TFAuthLog import TFAuthLog
+from TFHttpLog import TFHttpLog
+from TFGenericLog import TFGenericLog
+from TFExceptions import TFException, TFAPIUnavailable, TFLogParsingException
