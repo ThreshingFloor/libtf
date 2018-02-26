@@ -378,7 +378,7 @@ class TFAuthLog:
         
         # Hit the auth endpoint with a list of features
         try:
-            r = requests.post(self.BASE_URI + self.API_ENDPOINT, data = json.dumps(features), headers={'XAPIKEY_HEADER': self.apiKey})
+            r = requests.post(self.BASE_URI + self.API_ENDPOINT, data = json.dumps(features), headers={'x-api-key': self.apiKey})
         except requests.exceptions.ConnectionError as e:
             raise TFAPIUnavailable("The ThreshingFloor API appears to be unavailable.")
 
