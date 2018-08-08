@@ -1,10 +1,12 @@
-import re
-import requests
 import json
-from TFExceptions import *
+import re
+
+import requests
+
+from .tf_exceptions import TFAPIUnavailable
 
 
-class TFGenericLog:
+class TFGenericLog(object):
 
     ################################
     # Description:
@@ -180,8 +182,3 @@ class TFGenericLog:
             raise TFAPIUnavailable("Request failed and returned a status of: " + str(r.status_code))
 
         return json.loads(r.text)
-
-
-
-
-
