@@ -32,12 +32,15 @@ class TFGenericLog(TFLogBase):
         """
         for line in self.line_iterator:
             m = re.search(GENERIC_IPV4_REGEX, line)
+
+            data = {
+                'raw': line
+            }
+
             if m:
-                data = {
-                    'ip': m.group('ip'),
-                    'raw': line
-                }
-                self.parsed_lines.append(data)
+                data['ip'] = m.group('ip')
+
+            self.parsed_lines.append(data)
 
     def _extract_features(self):
         """
@@ -46,6 +49,7 @@ class TFGenericLog(TFLogBase):
         for parsed_line in self.parsed_lines:
             result = {'raw': parsed_line}
 
-            result['ip'] = parsed_line['ip']
-            if result['ip'] not in self.features['ips']:
-                self.features['ips'].append(result['ip'])
+            if 'ip' in parsed_line:
+                result['ip'] = parsed_line['ip']
+                if result['ip'] not in self.features['ips']:
+                    self.features['ips'].append(result['ip'])

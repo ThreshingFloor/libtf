@@ -68,7 +68,7 @@ class TFAuthLog(TFLogBase):
         for parsed_line in self.parsed_lines:
 
             # If it's ssh, we can handle it
-            if parsed_line['program'] == 'sshd':
+            if parsed_line.get('program') == 'sshd':
                 result = self._parse_auth_message(parsed_line['message'])
 
                 # Add the ip if we have it
@@ -90,16 +90,21 @@ class TFAuthLog(TFLogBase):
         """
         for line in self.line_iterator:
             m = COMPILED_AUTH_LOG_REGEX.match(line)
+
+            data = {
+                'raw': line
+            }
+
             if m:
-                data = {
+                data.update({
                     'timestamp': self._to_epoch(m.group(1)),
                     'hostname': m.group(2),
                     'program': m.group(3),
                     'processid': m.group(4),
                     'message': m.group(5),
-                    'raw': line
-                }
-                self.parsed_lines.append(data)
+                })
+
+            self.parsed_lines.append(data)
 
     def _analyze(self):
         """
@@ -113,7 +118,7 @@ class TFAuthLog(TFLogBase):
                     pids.append(pid)
 
         for line in self.parsed_lines:
-            if line['processid'] in pids:
+            if 'processid' in line and line['processid'] in pids:
                 self.noisy_logs.append(line)
             else:
                 self.quiet_logs.append(line)

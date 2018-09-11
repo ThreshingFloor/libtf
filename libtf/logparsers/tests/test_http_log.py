@@ -12,7 +12,8 @@ class TestTFHTTPLog(TestCase):
             '192.168.1.10 - - [13/Sep/2006:07:01:53 -0700] "PROPFIND /svn/1234/Extranet/branches/SOW-101 HTTP/1.1"'
             ' 401 587',
             '192.168.1.20 - - [28/Jul/2006:10:27:10 -0300] "GET /cgi-bin/try/ HTTP/1.0" 200 3395',
-            '192.178.1.30 - - [28/Jul/2006:10:27:32 -0300] "GET /hidden/ HTTP/1.0" 404 7218'
+            '192.178.1.30 - - [28/Jul/2006:10:27:32 -0300] "GET /hidden/ HTTP/1.0" 404 7218',
+            'Line that does not match ip regex'
         ], 'foo')
 
     def test_ports_default_to_common_http_ports(self):
@@ -38,5 +39,6 @@ class TestTFHTTPLog(TestCase):
                  'raw': '192.168.1.10 - - [13/Sep/2006:07:01:53 -0700] "PROPFIND /svn/1234/Extranet/branches/SOW-101 '
                         'HTTP/1.1" 401 587'},
                 {'ip': '192.178.1.30',
-                 'raw': '192.178.1.30 - - [28/Jul/2006:10:27:32 -0300] "GET /hidden/ HTTP/1.0" 404 7218'}
+                 'raw': '192.178.1.30 - - [28/Jul/2006:10:27:32 -0300] "GET /hidden/ HTTP/1.0" 404 7218'},
+                {'raw': 'Line that does not match ip regex'}
             ])

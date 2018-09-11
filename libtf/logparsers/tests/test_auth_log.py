@@ -15,7 +15,8 @@ class TestTFAuthLog(TestCase):
             'Feb 21 00:13:35 localhost sshd[7483]: Accepted password for sally from 192.168.33.1 port 58803 ssh2',
             'Feb 21 08:35:22 localhost sshd[5774]: Failed password for root from 116.31.116.24 port 29160 ssh2',
             'Feb 21 19:19:26 localhost sshd[16153]: Failed password for invalid user zuidberg from 142.0.45.14 port 52772 ssh2',
-            'Feb 21 21:56:12 localhost sshd[3430]: Invalid user test from 10.0.2.2'
+            'Feb 21 21:56:12 localhost sshd[3430]: Invalid user test from 10.0.2.2',
+            'Line that does not match ip regex'
         ], 'foo')
 
     def test_ports_default_to_common_ssh_ports(self):
@@ -66,4 +67,5 @@ class TestTFAuthLog(TestCase):
                 {'timestamp': 1519172015, 'hostname': 'localhost', 'program': 'sshd', 'processid': '7483',
                  'message': 'Accepted password for sally from 192.168.33.1 port 58803 ssh2',
                  'raw': 'Feb 21 00:13:35 localhost sshd[7483]: Accepted password for sally from 192.168.33.1 port 58803'
-                        ' ssh2'}])
+                        ' ssh2'},
+                {'raw': 'Line that does not match ip regex'}])
