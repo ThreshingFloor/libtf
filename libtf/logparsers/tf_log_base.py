@@ -8,7 +8,7 @@ from libtf.logparsers.tf_exceptions import TFAPIUnavailable
 
 
 class TFLogBase(object):
-    api_endpoint = '/reducer/seen'
+    api_endpoint = '/v2/reducer/seen'
     default_base_uri = "https://api.threshingfloor.io"
     default_ip_query_batch_size = 1000
 
