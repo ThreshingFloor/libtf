@@ -11,7 +11,8 @@ class TestTFGenericLog(TestCase):
         self.tf_generic_log = TFGenericLog([
             '192.168.1.10 - - [13/Sep/2006:07:01:53 -0700] foo bar baz',
             '192.168.1.20 - - [28/Jul/2006:10:27:10 -0300] foo bar baz',
-            '192.178.1.30 - - [28/Jul/2006:10:27:32 -0300] foo bar baz'
+            '192.178.1.30 - - [28/Jul/2006:10:27:32 -0300] foo bar baz',
+            'Line that does not match ip regex'
         ], 'foo', ports=['123:udp'])
 
     def test_ports_must_be_specified(self):
@@ -35,5 +36,6 @@ class TestTFGenericLog(TestCase):
                 {'ip': '192.168.1.10',
                  'raw': '192.168.1.10 - - [13/Sep/2006:07:01:53 -0700] foo bar baz'},
                 {'ip': '192.178.1.30',
-                 'raw': '192.178.1.30 - - [28/Jul/2006:10:27:32 -0300] foo bar baz'}
+                 'raw': '192.178.1.30 - - [28/Jul/2006:10:27:32 -0300] foo bar baz'},
+                {'raw': 'Line that does not match ip regex'}
             ])
